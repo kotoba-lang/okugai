@@ -79,5 +79,10 @@
         (is (= 660 (:regulation/threshold-corridor-ft us)))))
     (testing "未収録の大人口法域も entity として引ける"
       (let [uncovered (filter #(false? (:jurisdiction/covered %)) s)]
-        (is (= 9 (count uncovered)))
-        (is (every? :jurisdiction/population uncovered))))))
+        (is (= 3 (count uncovered)))
+        (is (every? :jurisdiction/population uncovered))))
+    (testing "媒体社カタログも同じ shard に入る"
+      (is (seq (filter :operator/id s)))
+      (doseq [o (filter :operator/id s)]
+        (is (seq (:operator/source-urls o)) (str (:operator/id o)))
+        (is (seq (:operator/jurisdictions o)) (str (:operator/id o)))))))

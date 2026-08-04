@@ -12,11 +12,12 @@
       (is (= (count ids) (count (distinct ids)))))))
 
 (deftest eight-jurisdictions-are-covered
-  (is (= ["ARE" "CHN" "DEU" "FRA" "IND" "JPN" "SAU" "USA"] (:jurisdictions (facts/coverage))))
+  (is (= ["ARE" "BRA" "CHN" "DEU" "FRA" "IDN" "IND" "JPN" "MEX" "NGA" "PAK" "RUS" "SAU" "USA"]
+         (:jurisdictions (facts/coverage))))
   (testing "未収録の大人口法域を名指しで申告する"
     (let [c (facts/coverage)]
-      (is (= 9 (count (:uncovered-large c))))
-      (is (some #(re-find #"IDN" %) (:uncovered-large c)))
+      (is (= 3 (count (:uncovered-large c))))
+      (is (some #(re-find #"BGD" %) (:uncovered-large c)))
       (is (re-find #"EU レベルの掲出許可制度は存在しない" (:note c))))))
 
 (deftest display-permit-applies-in-every-covered-jurisdiction
@@ -55,11 +56,11 @@
                    :us-highway-beautification-act))))
 
 (deftest unknown-jurisdiction-has-no-spec-basis
-  (is (= :no-spec-basis (facts/applicable "BRA" {:medium :billboard})))
-  (is (= :no-spec-basis (facts/required-evidence "BRA" {:medium :billboard})))
-  (is (= :no-spec-basis (facts/missing-evidence "BRA" {:medium :billboard} [])))
+  (is (= :no-spec-basis (facts/applicable "BGD" {:medium :billboard})))
+  (is (= :no-spec-basis (facts/required-evidence "BGD" {:medium :billboard})))
+  (is (= :no-spec-basis (facts/missing-evidence "BGD" {:medium :billboard} [])))
   (testing "未収録法域は undetermined? が true（＝進めない）"
-    (is (true? (facts/undetermined? "BRA" {:medium :billboard})))))
+    (is (true? (facts/undetermined? "BGD" {:medium :billboard})))))
 
 (deftest unknown-dimensions-are-never-treated-as-not-required
   (let [a (facts/applicable "JPN" {:medium :billboard})]
@@ -101,7 +102,7 @@
     (is (seq (:reg/evidence-key r)) (str iso3 "/" id " has no evidence key"))))
 
 (deftest summary-says-when-there-is-no-basis
-  (is (re-find #"spec-basis 無し" (facts/summary "BRA" {:medium :billboard})))
+  (is (re-find #"spec-basis 無し" (facts/summary "BGD" {:medium :billboard})))
   (is (re-find #"要 " (facts/summary "JPN" {:medium :board}))))
 
 (deftest iso-3166-2-codes-resolve-to-the-catalog
@@ -113,7 +114,7 @@
     (is (= "JPN" (facts/iso3-of "JPN")))
     (is (true? (facts/covered? "US-CA"))))
   (testing "未収録国の alpha-2 は解決しない（法令が無いのに法域が立つのを防ぐ）"
-    (is (nil? (facts/iso3-of "BR-SP")))
-    (is (nil? (facts/iso3-of "ID-JK")))
-    (is (false? (facts/covered? "BR-SP")))
+    (is (nil? (facts/iso3-of "BD-13")))
+    (is (nil? (facts/iso3-of "ET-AA")))
+    (is (false? (facts/covered? "BD-13")))
     (is (nil? (facts/iso3-of nil)))))

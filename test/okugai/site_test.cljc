@@ -90,7 +90,7 @@
     (is (some #{"jp-building-code-88"} (:regulatory/required s)))
     (is (some #{"jp-building-code-64"} (:regulatory/required s))))
   (testing "未収録法域は :no-spec-basis を返して隠さない"
-    (let [s (order/regulatory-summary (assoc (draft) :order/jurisdiction "BRA"))]
+    (let [s (order/regulatory-summary (assoc (draft) :order/jurisdiction "BGD"))]
       (is (= :no-spec-basis (:regulatory/status s))))))
 
 (deftest unreachable-route-blocks-inquiry

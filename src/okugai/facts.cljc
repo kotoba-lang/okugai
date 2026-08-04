@@ -228,6 +228,90 @@
      :reg/note "掲出物の許可とは別に、**広告を扱う事業者側**のライセンスが要る。媒体社照会の前提条件になる。"
      :reg/source-urls ["https://gmedia.gov.sa/en/services/licensing-of-advertising-offices-marketing-offices-and-advertising-agencies"]}}
 
+   "RUS"
+   {:ru-outdoor-ad-permit
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Разрешение на установку и эксплуатацию рекламной конструкции"
+     :reg/authority "Орган местного самоуправления（муниципальный район / округ / городской округ）"
+     :reg/legal-basis "Федеральный закон от 13.03.2006 N 38-ФЗ «О рекламе», статья 19"
+     :reg/evidence-key "outdoor-ad-permit-record"
+     :reg/note "設置は自治体の схема размещения рекламных конструкций に沿う必要がある。自治体は掲出位置・外観・技術諸元に関係しない書類を要求できず、許可発行に追加料金も取れない（法19条）。申請は書面または Госуслуги 経由。"
+     :reg/source-urls ["https://www.consultant.ru/document/cons_doc_LAW_58968/557f501dd14e1da00da85dd8d8429a8a456bb0f9/"
+                       "https://base.garant.ru/12145525/95ef042b11da42ac166eeedeb998f688/"]}
+    :ru-state-land-auction
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Договор на установку через торги（аукцион / конкурс）"
+     :reg/authority "Собственник государственного или муниципального имущества"
+     :reg/legal-basis "38-ФЗ «О рекламе», статья 19"
+     :reg/evidence-key "site-owner-consent-record"
+     :reg/note "国有・自治体所有の土地/建物に設置する契約は**入札（オークションまたはコンペ）による**。地権者の任意合意では取れない —— 他法域の『地権者 NOC』とは手続きの性質が違う。"
+     :reg/source-urls ["https://www.consultant.ru/document/cons_doc_LAW_58968/557f501dd14e1da00da85dd8d8429a8a456bb0f9/"]}}
+
+   "BRA"
+   {:br-municipal-licence
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Licença municipal para anúncio / publicidade"
+     :reg/authority "Prefeitura（市。連邦法ではない）"
+     :reg/legal-basis "市の景観法。São Paulo は Lei nº 14.223/2006「Cidade Limpa」（2007-01-01 施行）"
+     :reg/evidence-key "municipal-advertising-licence-record"
+     :reg/note "**São Paulo は outdoor（ビルボード）と外壁面の広告塗装を原則禁止した。**公道での brand 広告が許されるのは市の concession を受けた urban furniture 上のみ。指示広告（営業所の自己表示）・行政との提携広告・文化/教育/不動産目的は別カテゴリ。違反は警告→罰金→再犯で倍額→許可取消→撤去。"
+     :reg/source-urls ["https://www.prefeitura.sp.gov.br/cidade/secretarias/licenciamento/noticias/?p=309238"
+                       "https://drive.prefeitura.sp.gov.br/cidade/secretarias/subprefeituras/upload/pinheiros/arquivos/Cartilha_lei_cidade_limpa.pdf"]}}
+
+   "IDN"
+   {:id-reklame-permit
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Izin penyelenggaraan reklame"
+     :reg/authority "Pemerintah daerah（DPMPTSP 等）"
+     :reg/legal-basis "各地方の Perda。DKI Jakarta は Perda No. 9 Tahun 2014 tentang Penyelenggaraan Reklame"
+     :reg/evidence-key "reklame-permit-record"
+     :reg/note "許可は地方ごとの Perda で決まるので掲出地の規則を確認する。"
+     :reg/source-urls ["https://dpp.jakarta.go.id/berita/mengenal-lebih-dalam-pajak-reklame-menurut-perda-nomor-1-tahun-2024"
+                       "https://www.hukumcorner.com/bagaimana-mengurus-izin-pemasangan-iklan-reklame-di-jalan/"]}
+    :id-pajak-reklame
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Pajak reklame（広告税）"
+     :reg/authority "Pemerintah daerah（地方税）"
+     :reg/legal-basis "UU No. 28 Tahun 2009 tentang Pajak Daerah dan Retribusi Daerah + 各地方 Perda"
+     :reg/evidence-key "advertising-tax-record"
+     :reg/note "**掲出許可とは別に地方税の納付証明が要る。**合法な掲出事業者は許可と納税証明の両方を持つ。中央/地方政府自身の広告、インターネット・TV・ラジオ・新聞等は課税対象外。"
+     :reg/source-urls ["https://www.online-pajak.com/tentang-pajak/pajak-reklame/"
+                       "https://klikpajak.id/blog/fungsi-dan-penghitungan-pajak-reklame/"]}}
+
+   "MEX"
+   {:mx-cdmx-licence
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Licencia / Permiso Administrativo Temporal Revocable de publicidad exterior"
+     :reg/authority "SEDUVI（Secretaría de Desarrollo Urbano y Vivienda, CDMX）"
+     :reg/legal-basis "Ley de Publicidad Exterior de la Ciudad de México y su Reglamento"
+     :reg/evidence-key "advertising-permit-record"
+     :reg/note "SEDUVI が licencia・autorización temporal・PATR を発行/取消。**Registro de Publicistas（広告事業者登録）と Catálogo Oficial** があり、掲出は nodos publicitarios / corredores という指定ゾーンに集約される設計。これは CDMX の制度で、他州は別。"
+     :reg/source-urls ["https://www.seduvi.cdmx.gob.mx/comunicacion/nota/presenta-seduvi-la-plataforma-digital-de-publicidad-exterior-de-la-ciudad-de-mexico-para-anunciantes-marcas-y-publicistas"
+                       "https://www.seduvi.cdmx.gob.mx/storage/app/uploads/public/5c8/1c4/d17/5c81c4d17fe99070894653.pdf"]}}
+
+   "NGA"
+   {:ng-lagos-signage-permit
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "LASAA signage / advertisement permit"
+     :reg/authority "Lagos State Signage and Advertisement Agency (LASAA)"
+     :reg/legal-basis "Lagos State Structures for Signage and Advertisement Agency Law, 2006（および改正）"
+     :reg/evidence-key "signage-permit-record"
+     :reg/note "所定手数料の納付で発行され**毎年更新**。承認後に structure permit number が付与され、掲出物にその番号を表示する義務がある。これは Lagos 州の制度で、他州は別機関。"
+     :reg/source-urls ["https://lasaa.lg.gov.ng/"
+                       "http://www.lasaa.com/need-permission/apply-for-signage-permit/"
+                       "http://www.lasaa.com/regulations/"]}}
+
+   "PAK"
+   {:pk-municipal-permit
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "自治体／カントンメント委員会の掲出許可"
+     :reg/authority "Karachi Metropolitan Corporation・Defence Housing Authority・cantonment boards 等"
+     :reg/legal-basis "各自治体・カントンメントの規則、および全国の outdoor advertising policy"
+     :reg/evidence-key "municipal-advertising-licence-record"
+     :reg/note "⚠ **最高裁が『公有地上の屋外広告ビルボードを許す法は無い』と判示し、Karachi の全ビルボード撤去を命じた**（2016）。公有地上の掲出可否は法的に争いがあるので、この法域では『許可が取れる』を前提に設計しない。政策側は歴史的・環境的に重要な地域と公的機関区域での広告を禁じ、幹線道路・農業・工業地域については構造・安全・間隔の要件を定める。"
+     :reg/source-urls ["https://tribune.com.pk/story/1098030/supreme-court-ruling-take-down-all-billboards-by-june-30"
+                       "https://www.dawn.com/news/790878"]}}
+
    "ARE"
    {:ae-dubai-advertising-permit
     {:reg/category :display-permit :reg/decision :always
@@ -258,22 +342,34 @@
    "SAU" {:name "Saudi Arabia" :permit-level :national-and-municipal
           :note "MoMaH（Balady）が掲出許可、GAMR が事業者ライセンス。"}
    "ARE" {:name "United Arab Emirates" :permit-level :emirate
-          :note "首長国ごとに別制度。ここに収録したのは Dubai のみ。"}})
+          :note "首長国ごとに別制度。ここに収録したのは Dubai のみ。"}
+   "RUS" {:name "Russia" :permit-level :municipal
+          :note "38-ФЗ が全国の枠、許可は自治体。国有/自治体所有地は入札で契約する。"}
+   "BRA" {:name "Brazil" :permit-level :municipal
+          :note "連邦法ではなく市の景観法。São Paulo の Cidade Limpa はビルボードを原則禁止。"}
+   "IDN" {:name "Indonesia" :permit-level :municipal
+          :note "地方の Perda が許可、UU 28/2009 に基づく地方広告税の納付も要る。"}
+   "MEX" {:name "Mexico" :permit-level :municipal
+          :note "収録は CDMX（SEDUVI）のみ。他州は別制度。"}
+   "NGA" {:name "Nigeria" :permit-level :state
+          :note "収録は Lagos 州（LASAA）のみ。他州は別機関。"}
+   "PAK" {:name "Pakistan" :permit-level :municipal
+          :note "公有地上のビルボードは最高裁判断により法的地位が不安定。"}})
 
 ;; 未収録のうち人口の大きい法域。「N 法域収録」だけ見せると世界を覆っているように
 ;; 読めるので、名指しで残す。人口は World Bank 2024（SP.POP.TOTL）。
 (def uncovered-large-jurisdictions
   {:source-url "https://data.worldbank.org/indicator/SP.POP.TOTL"
    :as-of "2024"
-   :entries [{:iso3 "IDN" :name "Indonesia" :population 283000000}
-             {:iso3 "PAK" :name "Pakistan" :population 251000000}
-             {:iso3 "NGA" :name "Nigeria" :population 232000000}
-             {:iso3 "BRA" :name "Brazil" :population 212000000}
-             {:iso3 "BGD" :name "Bangladesh" :population 173000000}
-             {:iso3 "RUS" :name "Russia" :population 144000000}
-             {:iso3 "MEX" :name "Mexico" :population 130000000}
-             {:iso3 "ETH" :name "Ethiopia" :population 130000000}
-             {:iso3 "EGY" :name "Egypt" :population 116000000}]})
+   ;; 2026-08-04: IDN PAK NGA BRA RUS MEX を収録したのでここから外した。
+   ;; 残る 3 件は**一次情報の出典が取れなかった** —— 「調べたが見つからなかった」
+   ;; であって「規制が無い」ではない。推測で書くくらいなら未収録のまま残す。
+   :entries [{:iso3 "BGD" :name "Bangladesh" :population 173000000
+              :why "Dhaka City Corporation の屋外広告規則について一次情報に到達できず"}
+             {:iso3 "ETH" :name "Ethiopia" :population 130000000
+              :why "Addis Ababa の屋外広告規則について一次情報に到達できず"}
+             {:iso3 "EGY" :name "Egypt" :population 116000000
+              :why "Cairo Governorate の掲出許可手続について一次情報に到達できず"}]})
 
 (def alpha2->iso3
   "収録法域の alpha-2 → alpha-3。survey の area は ISO 3166-2（\"JP-13\" \"US-NY\"）で
@@ -281,7 +377,8 @@
   **収録法域だけ**を載せる —— 未収録国の alpha-2 をここに足すと、法令が無いのに
   法域が解決できてしまう。"
   {"JP" "JPN" "US" "USA" "DE" "DEU" "FR" "FRA" "CN" "CHN" "IN" "IND"
-   "SA" "SAU" "AE" "ARE"})
+   "SA" "SAU" "AE" "ARE" "RU" "RUS" "BR" "BRA" "ID" "IDN" "MX" "MEX"
+   "NG" "NGA" "PK" "PAK"})
 
 (defn iso3-of
   "\"JPN\" / \"JP-13\" / \"JP\" → \"JPN\"。解決できなければ nil（推測しない）。"

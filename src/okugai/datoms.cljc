@@ -13,6 +13,7 @@
   『その地点は存在しない』の証拠に使われるのを防ぐため。"
   (:require [okugai.facts :as facts]
             [okugai.medium :as medium]
+            [okugai.operator :as operator]
             [okugai.route :as route]))
 
 (defn site->entity
@@ -37,7 +38,22 @@
     (:site/survey-area site) (assoc :site/survey-area (:site/survey-area site))
     (:site/route-status site) (assoc :site/route-status (name (:site/route-status site)))
     (seq (:site/owner-candidates site)) (assoc :site/owner-candidates (:site/owner-candidates site))
-    (seq (:site/agencies site)) (assoc :site/agencies (:site/agencies site))))
+    (seq (:site/agencies site)) (assoc :site/agencies (:site/agencies site))
+    (seq (:site/operator-candidates site))
+    (assoc :site/operator-candidates (:site/operator-candidates site))))
+
+(defn operator->entity
+  [o]
+  {:operator/id (name (:operator/id o))
+   :operator/legal-name (:operator/legal-name o)
+   :operator/hq (:operator/hq o)
+   :operator/jurisdictions (vec (sort (:operator/jurisdictions o)))
+   :operator/media (vec (sort (map name (:operator/media o))))
+   :operator/kind (name (:operator/kind o))
+   :operator/site-url (get-in o [:operator/contact :site-url])
+   :operator/source-urls (vec (:operator/source-urls o))
+   :operator/as-of (:operator/as-of o)
+   :operator/note (:operator/note o)})
 
 (defn medium->entity
   [id]
@@ -93,6 +109,7 @@
   従来どおりできる。"
   []
   (vec (concat (map medium->entity (sort (keys medium/media)))
+               (map operator->entity (map val (sort-by key operator/operators)))
                (map jurisdiction->entity (sort (keys facts/regulations)))
                (for [iso3 (sort (keys facts/regulations))
                      id (sort (keys (facts/regulations-for iso3)))]

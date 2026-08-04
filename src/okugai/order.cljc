@@ -23,7 +23,8 @@
   **規制の要否が `:undetermined` のまま `:permit-filed` に進めない** ——
   高さ不明の広告板を『工作物確認は不要』として扱うと違法着工になる。"
   (:require [okugai.facts :as facts]
-            [okugai.medium :as medium]))
+            [okugai.medium :as medium]
+            [okugai.route :as route]))
 
 (def states
   #{:draft :quoted :inquiry-proposed :inquiry-sent :agency-confirmed
@@ -88,7 +89,7 @@
       (conj "no indicative quote attached")
 
       (and (#{:inquiry-proposed :inquiry-sent} to)
-           (not (contains? #{:routable :candidate-by-area} route)))
+           (not (route/reachable-status? route)))
       (conj (str "no reachable agency for site " (:site/id site)
                  " (route-status=" route ") — 窓口も候補も無いまま問い合わせを組まない"))
 
