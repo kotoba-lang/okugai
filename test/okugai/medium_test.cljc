@@ -37,13 +37,13 @@
   (doseq [[id m] medium/media]
     (is (seq (:medium/regulatory-triggers m)) (str id " has no triggers"))
     (is (contains? (:medium/regulatory-triggers m)
-                   (if (= id :expressway-service-area) :expressway :outdoor-ad-permit))
-        (str id " must declare its primary permit regime"))))
+                   (if (= id :expressway-service-area) :highway-corridor :display-permit))
+        (str id " must declare its primary permit category"))))
 
-(deftest tall-media-declare-the-building-code
-  (testing "自立・屋上の大型媒体は 88 条（4m 超）を trigger に持つ"
+(deftest tall-media-declare-the-structural-category
+  (testing "自立・屋上の大型媒体は :structural を trigger に持つ（どの法令が担うかは法域次第）"
     (doseq [id [:billboard :rooftop :screen :totem :expressway-roadside]]
-      (is (contains? (medium/triggers id) :building-code-88) (str id)))))
+      (is (contains? (medium/triggers id) :structural) (str id)))))
 
 (deftest mapillary-mapping-is-one-way-and-explicit
   (is (= :utility-pole (medium/mapillary-object->medium "object--support--utility-pole")))
@@ -60,14 +60,24 @@
     (is (= :billboard (:medium/derived-from (medium/describe :expressway-roadside))))
     (is (empty? (:medium/osm (medium/describe :expressway-roadside))))))
 
-(deftest catalog-shard-carries-media-and-regulations
+(deftest catalog-shard-carries-media-jurisdictions-and-instruments
   (let [s (datoms/catalog-shard)]
     (is (= (count medium/media) (count (filter :medium/id s))))
     (is (seq (filter :regulation/id s)))
-    (testing "規制 entity は出典 URL を必ず持つ"
+    (testing "instrument entity は法域と出典 URL を必ず持つ"
       (doseq [r (filter :regulation/id s)]
-        (is (seq (:regulation/source-urls r)) (str (:regulation/id r)))))
-    (testing "4m 閾値が entity に出る"
-      (let [r88 (first (filter #(= "building-code-88" (:regulation/id %)) s))]
-        (is (= 4.0 (:regulation/threshold-height-m r88)))
-        (is (seq (:regulation/penalty r88)))))))
+        (is (seq (:regulation/source-urls r)) (str (:regulation/id r)))
+        (is (seq (:regulation/jurisdiction r)) (str (:regulation/id r)))))
+    (testing "閾値の軸が法域で違うことが entity に出る"
+      (let [jp (first (filter #(= "jp-building-code-88" (:regulation/id %)) s))
+            de (first (filter #(= "de-genehmigungsfreiheit" (:regulation/id %)) s))
+            us (first (filter #(= "us-highway-beautification-act" (:regulation/id %)) s))]
+        (is (= 4.0 (:regulation/threshold-height-m jp)))
+        (is (seq (:regulation/penalty jp)))
+        (is (= 1.0 (:regulation/threshold-area-m2 de)))
+        (is (nil? (:regulation/threshold-height-m de)))
+        (is (= 660 (:regulation/threshold-corridor-ft us)))))
+    (testing "未収録の大人口法域も entity として引ける"
+      (let [uncovered (filter #(false? (:jurisdiction/covered %)) s)]
+        (is (= 9 (count uncovered)))
+        (is (every? :jurisdiction/population uncovered))))))

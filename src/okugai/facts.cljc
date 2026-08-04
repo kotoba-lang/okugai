@@ -1,203 +1,418 @@
 (ns okugai.facts
-  "屋外広告物の掲出に関する**管轄別・媒体別の法令カタログ**。
-  `denchu.facts`（電柱専用）を一般化したもの —— 電柱はここでは 1 媒体でしかない。
+  "屋外広告物の掲出に関する**法域別・媒体別の法令カタログ**。
 
-  `cloud-itonami-isic-7310` の `advertising.facts` と同じ規律: ここに無い管轄は
-  spec-basis が **無い**（advisor が創作してよい、ではない）。カバレッジは
-  `coverage` が正直に返す。
+  ## 各国の法令名を共通語彙にしない
 
-  ## 日本の構造 — 取り違えると設計が嘘になる点
+  最初 JP だけで作ったとき、規制 id は `:outdoor-ad-permit` `:road-occupancy`
+  `:building-code-88` `:building-code-64` という**日本の法令名**だった。多法域に
+  広げるとこれは嘘になる —— 米国に建築基準法88条は無いし、日本に Highway
+  Beautification Act は無い。
 
-  1. 屋外広告物法に基づき、**各自治体の屋外広告物条例**が許可を出す（国ではない）。
-  2. 多くの条例は電柱・街路灯柱への**貼り紙・貼り札・広告旗を禁止物件**として
-     列挙する。一方、所有者の許諾と条例許可を経た巻付/袖看板は許可対象として
-     別に扱われる。**『電柱広告は条例で禁止』と要約しない。**
-  3. **高さ4mを超える広告塔・広告板は建築基準法88条1項（令138条1項3号）の
-     工作物確認申請**が要る。屋上の広告塔も広告塔部分が4m超なら対象。確認済証の
-     交付前に着工すると違反（1年以下の懲役または100万円以下の罰金）。
-  4. **防火地域内**で建築物の屋上に設けるもの、または高さ3mを超えるものは主要な
-     部分を不燃材料に（建築基準法64条）。
-  5. 道路上空・路上に出る物件は道路法の**道路占用許可**、道路上に工作物を設ける
-     行為は道路交通法の**道路使用許可**。
-  6. **高速道路**は道路区域内が道路管理者（NEXCO 等）の管轄で、条例ではなく媒体社
-     経由。沿道（区域外）は条例の禁止区域指定や沿道ガイドラインが上乗せされうる。
+  そこで層を分けた:
 
-  ## 高さは媒体種別からは決まらない
+  - **カテゴリ**（`okugai.medium` の `:regulatory-triggers`）は普遍:
+    `:display-permit` / `:road-space` / `:structural` / `:highway-corridor`
+  - **instrument**（この ns の `regulations`）は法域ごと。同じカテゴリを
+    どの法令が担い、閾値がいくつで、誰が許可するかは国ごとに違う
 
-  同じ `:billboard` でも 3m と 6m がある。だから `okugai.medium` の
-  `:regulatory-triggers` は『効きうる規制』の集合で、実際の要否は
-  `applicable` に寸法・場所を渡して判定する。**寸法が不明なら
-  `:undetermined` を返す** —— 不明を『不要』に倒さない。"
+  実測される差の例:
+  - JP: 高さ **4m 超**で工作物確認申請（建築基準法88条）
+  - DE: **面積 1m² 超**で Baugenehmigung（Werbeanlage は bauliche Anlage）
+  - US: Interstate/primary の right-of-way から **660 フィート**以内が連邦の
+    実効管理対象（Highway Beautification Act, 23 U.S.C. §131）
+  - FR: 2024-01-01 から publicité の police が**市長へ分権**（Climat et Résilience 法）
+
+  ## カバレッジは正直に
+
+  ここに無い法域は spec-basis が **無い**（advisor が創作してよい、ではない）。
+  `coverage` は収録法域と、**人口の大きい未収録法域**を名指しで返す —— 「8 法域
+  収録」だけ見せると世界を覆っているように読めるため。
+
+  ## 不明を『不要』に倒さない
+
+  高さ・面積・区域が分からなければ `:undetermined`。`okugai.order` は
+  `:undetermined` が残る限り許可申請に進めない。"
   (:require [clojure.string :as str]
             [okugai.medium :as medium]))
 
+(def categories
+  "普遍カテゴリ。媒体はこれを trigger として持ち、法域がこれに instrument を割り当てる。"
+  #{:display-permit :road-space :structural :highway-corridor})
+
+;; ── 法域ごとの instrument ───────────────────────────────────────────
+;;
+;; `:reg/category`   どの普遍カテゴリを担うか
+;; `:reg/decision`   要否の決まり方
+;;                     :always        そのカテゴリに触れる媒体なら常に要る
+;;                     :overhang      道路上空・路上に出るなら要る
+;;                     :height        `:reg/threshold` の height-m 超で要る
+;;                     :area          `:reg/threshold` の area-m2 超で要る
+;;                     :zone          `:reg/zone` の区域内なら要る（+ height 併用可）
+;;                     :corridor      幹線道路の沿線・区域なら要る
+;; `:reg/evidence-key` 提出証跡のキー
 (def regulations
-  "規制 id → 根拠。`:trigger` は人が読む発動条件で、機械判定は `applicable`。"
-  {:outdoor-ad-permit
-   {:reg/id :outdoor-ad-permit
-    :reg/name-ja "屋外広告物条例に基づく許可"
-    :reg/authority "各都道府県・政令指定都市等"
-    :reg/legal-basis "屋外広告物法、および同法に基づく各自治体の屋外広告物条例"
-    :reg/evidence-key "outdoor-ad-permit-record"
-    :reg/trigger "原則すべての屋外広告物。禁止区域・禁止物件の指定は自治体ごとに異なる。"
-    :reg/source-urls ["https://www.rilg.or.jp/htdocs/img/reiki/057_outdoor_advertising.htm"
-                      "https://www.toshiseibi.metro.tokyo.lg.jp/documents/d/toshiseibi/pdf_kenchiku_koukoku_pdf_kou_siori"]}
-
-   :road-occupancy
-   {:reg/id :road-occupancy
-    :reg/name-ja "道路占用許可"
-    :reg/authority "道路管理者"
-    :reg/legal-basis "道路法第32条"
-    :reg/evidence-key "road-occupancy-permit-record"
-    :reg/trigger "道路上空・路上に継続して物件を設ける場合。"
-    :reg/source-urls ["https://www.city.osaka.lg.jp/kensetsu/page/0000372127.html"]}
-
-   :road-use
-   {:reg/id :road-use
-    :reg/name-ja "道路使用許可"
-    :reg/authority "所轄警察署"
-    :reg/legal-basis "道路交通法"
-    :reg/evidence-key "road-use-permit-record"
-    :reg/trigger "道路に広告板その他これらに類する工作物を設ける場合。"
-    :reg/source-urls ["https://www.etic.co.jp/feature/outdoor-advertising-rule/"]}
-
-   :building-code-88
-   {:reg/id :building-code-88
-    :reg/name-ja "工作物確認申請（広告塔・広告板）"
-    :reg/authority "建築主事／指定確認検査機関"
-    :reg/legal-basis "建築基準法第88条第1項（施行令第138条第1項第3号）"
-    :reg/evidence-key "building-code-88-record"
-    :reg/trigger "高さが4mを超える広告塔・広告板。屋上の広告塔も広告塔部分が4m超なら対象。"
-    :reg/penalty "確認済証の交付前の着工は違反（1年以下の懲役または100万円以下の罰金）"
-    :reg/threshold {:height-m 4.0}
-    :reg/source-urls ["https://www.city.ota.tokyo.jp/seikatsu/sumaimachinami/kenchiku/tatemono_tyuuikisei/kousakubutsu.html"
-                      "https://www.pref.nagano.lg.jp/toshikei/kurashi/sumai/kokoku/documents/takasanosantei.pdf"]}
-
-   :building-code-64
-   {:reg/id :building-code-64
-    :reg/name-ja "看板等の防火措置"
-    :reg/authority "建築主事／特定行政庁"
-    :reg/legal-basis "建築基準法第64条"
-    :reg/evidence-key "building-code-64-record"
-    :reg/trigger "防火地域内で、建築物の屋上に設けるもの、または高さ3mを超えるもの。主要部分を不燃材料で造るか覆う。"
-    :reg/threshold {:height-m 3.0 :zone :fire-prevention-district}
-    :reg/source-urls ["https://www.mori-sign.jp/column/sign-building-code-structure"]}
-
-   :expressway
-   {:reg/id :expressway
-    :reg/name-ja "高速道路の道路区域内／沿道の規制"
-    :reg/authority "道路管理者（NEXCO 東日本・中日本・西日本 等）／都道府県"
-    :reg/legal-basis "道路法、および都道府県の屋外広告物条例・高速道路等沿道ガイドライン"
-    :reg/evidence-key "expressway-authority-record"
-    :reg/trigger "道路区域内は道路管理者の許可（媒体としては NEXCO 系の媒体社経由）。沿道は条例の禁止区域指定・ガイドラインが上乗せされうる。"
-    :reg/source-urls ["https://www.pref.wakayama.lg.jp/prefg/080900/okugaikoukokubutsujyourei/about_okugaikoukokubutsu_d/fil/kousoku_guideline_1.pdf"
-                      "https://www.w-nexco-coms.co.jp/img/common/file/w-nexco-media.pdf"]}})
-
-(def catalog
-  "iso3 → 管轄の要件。`:required-evidence` は governor が掲出提案を通す前に実在を
-  要求する証跡。"
   {"JPN"
-   {:name "Japan"
-    :owner-authority "各都道府県・政令指定都市等（屋外広告物条例）／道路管理者（道路占用）／建築主事（工作物確認）"
-    :legal-basis "屋外広告物法、道路法、道路交通法、建築基準法"
-    :permit-authority-is-municipal? true
-    :regulations (vec (sort (keys regulations)))
-    ;; 媒体に依らず常に要る証跡。規制由来の証跡は `applicable` の結果から
-    ;; 導出する（媒体別に効く規制が違うので、固定リストにすると電柱に
-    ;; 工作物確認済証を要求するような嘘になる）。
-    :base-evidence ["site-owner-consent-record"
-                    "agency-order-record"
-                    "creative-spec-record"]
-    :prohibited-note "多数の条例が電柱・街路灯柱への貼り紙・貼り札・広告旗を禁止物件として列挙する。これは無断の貼付物に対する規制であり、所有者の許諾と条例許可を経た掲出物とは別扱い。"
-    :as-of "2026-08-04"}})
+   {:jp-outdoor-ad-ordinance
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "屋外広告物条例に基づく許可"
+     :reg/authority "各都道府県・政令指定都市等"
+     :reg/legal-basis "屋外広告物法、および同法に基づく各自治体の屋外広告物条例"
+     :reg/evidence-key "outdoor-ad-permit-record"
+     :reg/note "許可主体は自治体であって国ではない。多くの条例が電柱・街路灯柱への貼り紙・貼り札・広告旗を禁止物件として列挙するが、これは無断の貼付物への規制で、所有者許諾と条例許可を経た掲出物とは別扱い。"
+     :reg/source-urls ["https://www.rilg.or.jp/htdocs/img/reiki/057_outdoor_advertising.htm"
+                       "https://www.toshiseibi.metro.tokyo.lg.jp/documents/d/toshiseibi/pdf_kenchiku_koukoku_pdf_kou_siori"]}
+    :jp-road-occupancy
+    {:reg/category :road-space :reg/decision :overhang
+     :reg/name "道路占用許可" :reg/authority "道路管理者"
+     :reg/legal-basis "道路法第32条"
+     :reg/evidence-key "road-occupancy-permit-record"
+     :reg/source-urls ["https://www.city.osaka.lg.jp/kensetsu/page/0000372127.html"]}
+    :jp-road-use
+    {:reg/category :road-space :reg/decision :overhang
+     :reg/name "道路使用許可" :reg/authority "所轄警察署"
+     :reg/legal-basis "道路交通法"
+     :reg/evidence-key "road-use-permit-record"
+     :reg/source-urls ["https://www.etic.co.jp/feature/outdoor-advertising-rule/"]}
+    :jp-building-code-88
+    {:reg/category :structural :reg/decision :height :reg/threshold {:height-m 4.0}
+     :reg/name "工作物確認申請（広告塔・広告板）"
+     :reg/authority "建築主事／指定確認検査機関"
+     :reg/legal-basis "建築基準法第88条第1項（施行令第138条第1項第3号）"
+     :reg/evidence-key "building-code-88-record"
+     :reg/penalty "確認済証の交付前の着工は違反（1年以下の懲役または100万円以下の罰金）"
+     :reg/source-urls ["https://www.city.ota.tokyo.jp/seikatsu/sumaimachinami/kenchiku/tatemono_tyuuikisei/kousakubutsu.html"
+                       "https://www.pref.nagano.lg.jp/toshikei/kurashi/sumai/kokoku/documents/takasanosantei.pdf"]}
+    :jp-building-code-64
+    {:reg/category :structural :reg/decision :zone :reg/zone :fire-prevention-district
+     :reg/threshold {:height-m 3.0}
+     :reg/name "看板等の防火措置" :reg/authority "建築主事／特定行政庁"
+     :reg/legal-basis "建築基準法第64条"
+     :reg/evidence-key "building-code-64-record"
+     :reg/note "防火地域内で、建築物の屋上に設けるもの、または高さ3m超は主要部分を不燃材料で造るか覆う。"
+     :reg/source-urls ["https://www.mori-sign.jp/column/sign-building-code-structure"]}
+    :jp-expressway
+    {:reg/category :highway-corridor :reg/decision :corridor
+     :reg/name "高速道路の区域内／沿道の規制"
+     :reg/authority "道路管理者（NEXCO 東日本・中日本・西日本 等）／都道府県"
+     :reg/legal-basis "道路法、および都道府県の屋外広告物条例・高速道路等沿道ガイドライン"
+     :reg/evidence-key "highway-authority-record"
+     :reg/source-urls ["https://www.pref.wakayama.lg.jp/prefg/080900/okugaikoukokubutsujyourei/about_okugaikoukokubutsu_d/fil/kousoku_guideline_1.pdf"
+                       "https://www.w-nexco-coms.co.jp/img/common/file/w-nexco-media.pdf"]}}
 
-(defn requirements [iso3] (get catalog iso3))
-(defn covered? [iso3] (contains? catalog iso3))
+   "USA"
+   {:us-local-zoning
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Local sign permit / zoning approval"
+     :reg/authority "City or county zoning / building department"
+     :reg/legal-basis "Municipal zoning codes and sign ordinances (state law delegates)"
+     :reg/evidence-key "local-sign-permit-record"
+     :reg/note "連邦にも州にも全国一律の掲出許可は無い。実務の許可は自治体の zoning/sign ordinance。"
+     :reg/source-urls ["https://oaaa.org/policy-advocacy/general-information/laws-regulations/"]}
+    :us-state-outdoor-advertising-permit
+    {:reg/category :display-permit :reg/decision :corridor
+     :reg/name "State DOT outdoor advertising permit"
+     :reg/authority "State department of transportation"
+     :reg/legal-basis "State outdoor advertising control statutes required by 23 U.S.C. §131"
+     :reg/evidence-key "state-dot-outdoor-advertising-permit-record"
+     :reg/source-urls ["https://www.fhwa.dot.gov/real_estate/oac/oacprog.cfm"]}
+    :us-highway-beautification-act
+    {:reg/category :highway-corridor :reg/decision :corridor
+     :reg/name "Highway Beautification Act — federal outdoor advertising control"
+     :reg/authority "FHWA (via State control agreements)"
+     :reg/legal-basis "23 U.S.C. §131; 23 CFR Part 750"
+     :reg/threshold {:corridor-distance-ft 660}
+     :reg/evidence-key "highway-authority-record"
+     :reg/note "Interstate / Federal-aid primary / NHS の right-of-way から 660 フィート以内（都市部外では 660 フィート超でも本線から視認できるもの）が対象。州が effective control を維持しないと連邦道路資金の 10% を失う。commercial/industrial 地域に限って設置を認め、size/lighting/spacing は州と FHWA の協定で決まる。"
+     :reg/source-urls ["https://www.law.cornell.edu/uscode/text/23/131"
+                       "https://www.ecfr.gov/current/title-23/chapter-I/subchapter-H/part-750"
+                       "https://www.fhwa.dot.gov/real_estate/oac/oacprog.cfm"]}
+    :us-building-permit
+    {:reg/category :structural :reg/decision :height :reg/threshold {:height-m 0.0}
+     :reg/name "Building permit / structural review for signs"
+     :reg/authority "Local building department"
+     :reg/legal-basis "Adopted building codes (IBC Chapter 31 / local amendments)"
+     :reg/evidence-key "structural-permit-record"
+     :reg/note "閾値は自治体ごとに違うので 0.0（＝高さが分かれば要ると扱う）にしてある。実際の免除規定は自治体条例で確認する。"
+     :reg/source-urls ["https://oaaa.org/policy-advocacy/general-information/laws-regulations/"]}}
+
+   "DEU"
+   {:de-baugenehmigung
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Baugenehmigung für Werbeanlagen"
+     :reg/authority "Untere Bauaufsichtsbehörde（自治体の建築監督官庁）"
+     :reg/legal-basis "Landesbauordnung des jeweiligen Bundeslandes（州の建築法）"
+     :reg/evidence-key "baugenehmigung-record"
+     :reg/note "Werbeanlage は『公共交通空間または公共緑地から視認できる、告知・宣伝・営業表示のための定着した施設』。連邦法ではなく州法なので州ごとに違う。"
+     :reg/source-urls ["https://www.service-bw.de/zufi/leistungen/2043"
+                       "https://recht.nrw.de/lmi/owa/br_bes_detail?bes_id=4883&anw_nr=2&aufgehoben=J&det_id=417172"]}
+    :de-genehmigungsfreiheit
+    {:reg/category :structural :reg/decision :area :reg/threshold {:area-m2 1.0}
+     :reg/name "Genehmigungspflicht ab 1 m² (Regelfall)"
+     :reg/authority "Untere Bauaufsichtsbehörde"
+     :reg/legal-basis "Landesbauordnung（多くの州で総面積 1 m² まで genehmigungsfrei）"
+     :reg/evidence-key "structural-permit-record"
+     :reg/note "**閾値は高さではなく面積**。日本の 4m 超とは別の軸で決まる —— 普遍カテゴリを法令名にしなかった理由そのもの。州ごとに例外あり。"
+     :reg/source-urls ["https://www.service-bw.de/zufi/leistungen/2043"]}}
+
+   "FRA"
+   {:fr-declaration-prealable
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Déclaration préalable / autorisation préalable de publicité"
+     :reg/authority "Maire（2024-01-01 から。それ以前は préfet が原則）"
+     :reg/legal-basis "Code de l'environnement L581-1 以下・R581-1 以下"
+     :reg/evidence-key "declaration-prealable-record"
+     :reg/note "loi Climat et Résilience 第17条により publicité の police が 2024-01-01 に市長へ分権。RLP（règlement local de publicité）があればその地域規則が上乗せ。CERFA 16310*01。"
+     :reg/source-urls ["https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006074220/LEGISCTA000006159329/"
+                       "https://www.ecologie.gouv.fr/politiques-publiques/reglementation-publicite-exterieure-enseignes-preenseignes"]}}
+
+   "CHN"
+   {:cn-outdoor-ad-plan
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "户外广告设置规划・管理办法に基づく設置"
+     :reg/authority "县级以上地方人民政府（广告监督管理・城市建设・环境保护・公安の各部門が共同で策定）"
+     :reg/legal-basis "中华人民共和国广告法"
+     :reg/evidence-key "outdoor-ad-permit-record"
+     :reg/note "設置禁止が法律で列挙されている: 交通安全設施・交通標識を利用するもの／市政公共設施・交通安全設施・交通標識の使用を妨げるもの／生産や生活を妨げ市容市貌を損なうもの／国家機関・文物保護単位・名勝風景点の建築控制地帯／県級以上の地方政府が禁止した区域。"
+     :reg/source-urls ["http://gongbao.court.gov.cn/Details/5e4b747dcdf15e728ae60c3904cdc0.html"
+                       "https://faolex.fao.org/docs/pdf/chn204726.pdf"]}
+    :cn-content-review
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "広告内容の事前審査（特定分野）"
+     :reg/authority "有关行政主管部门"
+     :reg/legal-basis "中华人民共和国广告法（药品・医疗器械・农药・兽药 等）"
+     :reg/evidence-key "content-review-record"
+     :reg/note "医薬品・医療機器・農薬・獣医薬等の広告は発布前に内容審査が要る。媒体の形ではなく**広告内容**で決まる規制なので、他法域の構造規制とは別軸。"
+     :reg/source-urls ["http://gongbao.court.gov.cn/Details/5e4b747dcdf15e728ae60c3904cdc0.html"]}}
+
+   "IND"
+   {:in-municipal-noc
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Municipal advertising licence / NOC"
+     :reg/authority "各市自治体（BMC / MCD / BBMP 等）"
+     :reg/legal-basis "各 Municipal Corporation Act と市の outdoor advertising policy（例: Mumbai Municipal Corporation Act 1888 + BMC 屋外広告政策）"
+     :reg/evidence-key "municipal-advertising-licence-record"
+     :reg/note "全国一律の法は無く市ごと。BMC の政策（2024 改訂）は高さ 100 ft 上限、歩道上の設置禁止、国道 right-of-way 上の全面禁止、DOOH の 23 時消灯、国家的重要性のある像から 50m 以内の新設禁止 等。"
+     :reg/source-urls ["https://portal.mcgm.gov.in/irj/go/km/docs/documents/HomePage%20Data/Whats%20New/BMC%20Draft%20Policy%20Guidelines%20for%20Display%20of%20Outdoor%20Advertisements%202024.pdf"]}
+    :in-structural-stability
+    {:reg/category :structural :reg/decision :height :reg/threshold {:height-m 4.6}
+     :reg/name "Structural stability certificate"
+     :reg/authority "市自治体（登録構造技術者の証明）"
+     :reg/legal-basis "市の outdoor advertising policy / building bye-laws"
+     :reg/evidence-key "structural-permit-range-record"
+     :reg/note "閾値は市ごとに違い、典型は 15 ft 超（≒4.6m）。2024 年の Ghatkopar 事故（17 名死亡）後に規制が強化された。"
+     :reg/source-urls ["https://www.shubindiaadworks.com/blog/hoarding-permission-india-rules-regulations-guide"]}
+    :in-national-highway
+    {:reg/category :highway-corridor :reg/decision :corridor
+     :reg/name "National highway right-of-way の掲出制限"
+     :reg/authority "NHAI / 道路管理者・市自治体"
+     :reg/legal-basis "市の outdoor advertising policy（BMC は国道 right-of-way 上を全面禁止）"
+     :reg/evidence-key "highway-authority-record"
+     :reg/source-urls ["https://portal.mcgm.gov.in/irj/go/km/docs/documents/HomePage%20Data/Whats%20New/BMC%20Draft%20Policy%20Guidelines%20for%20Display%20of%20Outdoor%20Advertisements%202024.pdf"]}}
+
+   "SAU"
+   {:sa-municipal-licence
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Operational licence for an advertising or promotional sign"
+     :reg/authority "Ministry of Municipalities and Housing（Balady プラットフォーム経由）"
+     :reg/legal-basis "Rules of Regulating Advertisements and Publicity Boards (1991) と、これを更新した MoMaH の広告板規則"
+     :reg/evidence-key "municipal-advertising-licence-record"
+     :reg/note "Balady の電子サービスで自治体窓口に出向かずに申請できる。ライセンス期間満了時・営業終了時には撤去し原状回復する義務がある。"
+     :reg/source-urls ["https://balady.gov.sa/en/services/issuing-operational-license-advertising-or-promotional-sign"
+                       "https://momah.gov.sa/en/node/15049"]}
+    :sa-media-authority
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "広告会社・代理店のライセンス"
+     :reg/authority "General Authority for Media Regulation"
+     :reg/legal-basis "GAMR の広告事務所・マーケティング事務所・広告代理店ライセンス制度"
+     :reg/evidence-key "agency-licence-record"
+     :reg/note "掲出物の許可とは別に、**広告を扱う事業者側**のライセンスが要る。媒体社照会の前提条件になる。"
+     :reg/source-urls ["https://gmedia.gov.sa/en/services/licensing-of-advertising-offices-marketing-offices-and-advertising-agencies"]}}
+
+   "ARE"
+   {:ae-dubai-advertising-permit
+    {:reg/category :display-permit :reg/decision :always
+     :reg/name "Advertising permit (Emirate of Dubai)"
+     :reg/authority "Dubai Municipality（RTA・DET が経路により関与）"
+     :reg/legal-basis "Decree No. (6) of 2020 Regulating Advertisements in the Emirate of Dubai"
+     :reg/evidence-key "advertising-permit-record"
+     :reg/note "『何人も、Manual に従って発行された Permit を先に取得することなく、広告媒体を用いて広告スペースに広告を掲出してはならない』。屋外広告は site survey・design specification・地権者 NOC を要する。首長国ごとに別制度（Abu Dhabi は DMT）。"
+     :reg/source-urls ["https://dlp.dubai.gov.ae/Legislation%20Reference/2020/Decree%20No.%20(6)%20of%202020%20Regulating%20Advertisements%20in%20the%20Emirate%20of%20Dubai.html"]}}})
+
+(def base-evidence
+  "法域に依らず常に要る証跡。規制由来の証跡は `applicable` の結果から導出する。"
+  ["site-owner-consent-record" "agency-order-record" "creative-spec-record"])
+
+(def jurisdictions
+  {"JPN" {:name "Japan" :permit-level :municipal
+          :note "屋外広告物法が枠を与え、実際の許可は自治体条例。"}
+   "USA" {:name "United States" :permit-level :municipal-and-state
+          :note "連邦に掲出許可は無い。連邦（HBA）は幹線道路沿線の州による実効管理を義務づけるだけで、許可は州 DOT と自治体。"}
+   "DEU" {:name "Germany" :permit-level :state-and-municipal
+          :note "Werbeanlage は建築物（bauliche Anlage）扱いで州の Landesbauordnung が根拠。EU レベルの掲出許可制度は存在しない。"}
+   "FRA" {:name "France" :permit-level :municipal
+          :note "Code de l'environnement が全国の枠、RLP が地域規則。2024-01-01 に police が市長へ分権。EU レベルの掲出許可制度は存在しない。"}
+   "CHN" {:name "China" :permit-level :municipal
+          :note "广告法が禁止事項を法律で列挙し、設置規划と管理办法は県級以上の地方政府が策定。"}
+   "IND" {:name "India" :permit-level :municipal
+          :note "全国一律の法は無く、市の Municipal Corporation Act と市の広告政策。"}
+   "SAU" {:name "Saudi Arabia" :permit-level :national-and-municipal
+          :note "MoMaH（Balady）が掲出許可、GAMR が事業者ライセンス。"}
+   "ARE" {:name "United Arab Emirates" :permit-level :emirate
+          :note "首長国ごとに別制度。ここに収録したのは Dubai のみ。"}})
+
+;; 未収録のうち人口の大きい法域。「N 法域収録」だけ見せると世界を覆っているように
+;; 読めるので、名指しで残す。人口は World Bank 2024（SP.POP.TOTL）。
+(def uncovered-large-jurisdictions
+  {:source-url "https://data.worldbank.org/indicator/SP.POP.TOTL"
+   :as-of "2024"
+   :entries [{:iso3 "IDN" :name "Indonesia" :population 283000000}
+             {:iso3 "PAK" :name "Pakistan" :population 251000000}
+             {:iso3 "NGA" :name "Nigeria" :population 232000000}
+             {:iso3 "BRA" :name "Brazil" :population 212000000}
+             {:iso3 "BGD" :name "Bangladesh" :population 173000000}
+             {:iso3 "RUS" :name "Russia" :population 144000000}
+             {:iso3 "MEX" :name "Mexico" :population 130000000}
+             {:iso3 "ETH" :name "Ethiopia" :population 130000000}
+             {:iso3 "EGY" :name "Egypt" :population 116000000}]})
+
+(def alpha2->iso3
+  "収録法域の alpha-2 → alpha-3。survey の area は ISO 3166-2（\"JP-13\" \"US-NY\"）で
+  宣言されるが法令カタログは alpha-3 キーなので、この 1 枚だけ明示的に持つ。
+  **収録法域だけ**を載せる —— 未収録国の alpha-2 をここに足すと、法令が無いのに
+  法域が解決できてしまう。"
+  {"JP" "JPN" "US" "USA" "DE" "DEU" "FR" "FRA" "CN" "CHN" "IN" "IND"
+   "SA" "SAU" "AE" "ARE"})
+
+(defn iso3-of
+  "\"JPN\" / \"JP-13\" / \"JP\" → \"JPN\"。解決できなければ nil（推測しない）。"
+  [code]
+  (when (string? code)
+    (cond
+      (contains? regulations code) code
+      (contains? alpha2->iso3 code) (get alpha2->iso3 code)
+      (and (> (count code) 2) (= \- (nth code 2)))
+      (get alpha2->iso3 (subs code 0 2))
+      :else nil)))
+
+(defn requirements [iso3] (get jurisdictions (iso3-of iso3)))
+(defn covered? [iso3] (contains? regulations (iso3-of iso3)))
+(defn regulations-for [iso3] (get regulations (iso3-of iso3) {}))
+(defn describe-regulation
+  ([id] (some (fn [[_ regs]] (get regs id)) regulations))
+  ([iso3 id] (get-in regulations [(iso3-of iso3) id])))
 
 (defn coverage []
-  {:jurisdictions (vec (sort (keys catalog)))
-   :count (count catalog)
-   :regulations (count regulations)
-   :note (str "収録 " (count catalog) " 管轄 / " (count regulations)
-              " 規制。未収録の管轄は spec-basis 無し —— advisor は要件を創作してはならず、"
-              "governor は掲出提案を保留する。")})
+  (let [covered (vec (sort (keys regulations)))]
+    {:jurisdictions covered
+     :count (count covered)
+     :regulations (reduce + (map count (vals regulations)))
+     :uncovered-large (mapv (fn [e] (str (:iso3 e) " (" (:name e) ", "
+                                         (quot (:population e) 1000000) "M)"))
+                            (:entries uncovered-large-jurisdictions))
+     :note (str "収録 " (count covered) " 法域 / "
+                (reduce + (map count (vals regulations))) " instrument。"
+                "未収録の法域は spec-basis 無し —— advisor は要件を創作してはならず、"
+                "governor は掲出提案を保留する。人口 1 億超で未収録の法域が "
+                (count (:entries uncovered-large-jurisdictions))
+                " ある（IDN/PAK/NGA/BRA/BGD/RUS/MEX/ETH/EGY）。"
+                "**EU レベルの掲出許可制度は存在しない** —— DEU/FRA は加盟国法として収録した。")}))
 
 ;; ── 実際に効くかの判定 ──────────────────────────────────────────────
 
-(defn applicable
-  "この掲出が実際に受ける規制。`{:medium :billboard :height-m 5.2
-  :fire-prevention-district? true :overhangs-road? false :expressway-adjacent? false}`
+(defn- decide-one
+  "1 instrument の要否。`:yes` / `:no` / `:unknown`。"
+  [{:keys [reg/decision reg/threshold reg/zone]}
+   {:keys [height-m area-m2 overhangs-road? highway-adjacent? highway-facility?
+           special-zones]}]
+  (case decision
+    :always :yes
 
-  戻り値は `{:required #{...} :undetermined #{...} :not-applicable #{...}}`。
-  **寸法や区域が不明なら `:undetermined`** —— 不明を『不要』に倒すと、
+    :overhang (cond (nil? overhangs-road?) :unknown
+                    overhangs-road? :yes
+                    :else :no)
+
+    :height (cond (nil? height-m) :unknown
+                  (> height-m (:height-m threshold 0.0)) :yes
+                  :else :no)
+
+    :area (cond (nil? area-m2) :unknown
+                (> area-m2 (:area-m2 threshold 0.0)) :yes
+                :else :no)
+
+    ;; 区域 + 高さの複合（JP 64 条: 防火地域内で屋上、または高さ3m超）
+    :zone (cond (nil? special-zones) :unknown
+                (not (contains? special-zones zone)) :no
+                (nil? height-m) :unknown
+                (> height-m (:height-m threshold 0.0)) :yes
+                :else :no)
+
+    :corridor (cond highway-facility? :yes
+                    (nil? highway-adjacent?) :unknown
+                    highway-adjacent? :yes
+                    :else :no)
+
+    :unknown))
+
+(defn applicable
+  "この掲出が法域 `iso3` で実際に受ける規制。
+
+  `{:medium :billboard :height-m 5.2 :area-m2 12.0 :overhangs-road? false
+    :highway-adjacent? false :special-zones #{:fire-prevention-district}}`
+
+  戻り値は `{:required #{...} :undetermined #{...} :not-applicable #{...}}`
+  （要素は instrument id）。法域が未収録なら `:no-spec-basis`。
+
+  **寸法・面積・区域が不明なら `:undetermined`** —— 不明を『不要』に倒すと、
   確認申請なしで着工する提案が governor を通ってしまう。"
-  [{:keys [medium height-m fire-prevention-district? overhangs-road? expressway-adjacent?
-           expressway-facility?]}]
-  (let [trig (medium/triggers medium)
-        req (atom #{}) undet (atom #{}) na (atom #{})
-        decide (fn [reg v]
-                 (case v
-                   :yes (swap! req conj reg)
-                   :unknown (swap! undet conj reg)
-                   :no (swap! na conj reg)))]
-    (when (contains? trig :outdoor-ad-permit)
-      ;; 条例許可は原則すべての屋外広告物に効く（禁止区域・適用除外は自治体ごと）
-      (decide :outdoor-ad-permit :yes))
-    (when (contains? trig :road-occupancy)
-      (decide :road-occupancy (cond (nil? overhangs-road?) :unknown
-                                    overhangs-road? :yes
-                                    :else :no)))
-    (when (contains? trig :road-use)
-      (decide :road-use (cond (nil? overhangs-road?) :unknown
-                              overhangs-road? :yes
-                              :else :no)))
-    (when (contains? trig :building-code-88)
-      (decide :building-code-88 (cond (nil? height-m) :unknown
-                                      (> height-m 4.0) :yes
-                                      :else :no)))
-    (when (contains? trig :building-code-64)
-      (decide :building-code-64
-              (cond (nil? fire-prevention-district?) :unknown
-                    (not fire-prevention-district?) :no
-                    ;; 防火地域内: 屋上に設けるもの、または高さ3m超
-                    (= :building (:medium/attached-to (medium/describe medium))) :yes
-                    (nil? height-m) :unknown
-                    (> height-m 3.0) :yes
-                    :else :no)))
-    (when (contains? trig :expressway)
-      (decide :expressway (cond expressway-facility? :yes
-                                (nil? expressway-adjacent?) :unknown
-                                expressway-adjacent? :yes
-                                :else :no)))
-    {:required @req :undetermined @undet :not-applicable @na}))
+  [iso3 {:keys [medium] :as placement}]
+  (if-not (covered? iso3)
+    :no-spec-basis
+    (let [trig (medium/triggers medium)
+          regs (regulations-for iso3)
+          relevant (filter (fn [[_ r]] (contains? trig (:reg/category r))) regs)]
+      (reduce (fn [acc [id r]]
+                (case (decide-one r placement)
+                  :yes (update acc :required conj id)
+                  :unknown (update acc :undetermined conj id)
+                  :no (update acc :not-applicable conj id)))
+              {:required #{} :undetermined #{} :not-applicable #{}}
+              (sort-by key relevant)))))
 
 (defn undetermined?
-  "判定できない規制が残っているか。残っていたら掲出提案を進めてはいけない。"
-  [placement]
-  (boolean (seq (:undetermined (applicable placement)))))
+  "判定できない instrument が残っているか。法域が未収録なら true（＝進めない）。"
+  [iso3 placement]
+  (let [a (applicable iso3 placement)]
+    (or (= a :no-spec-basis) (boolean (seq (:undetermined a))))))
 
 (defn required-evidence
-  "この掲出に実際に要る証跡キー。基本証跡 + **実際に効く規制**の証跡だけ。
-  管轄が未収録なら `:no-spec-basis`。
+  "この掲出に実際に要る証跡キー。基本証跡 + **実際に効く／要否未確定の**
+  instrument の証跡。法域が未収録なら `:no-spec-basis`。
 
-  `:undetermined` な規制の証跡も要求する —— 要否が決まっていないものを
-  『不要だから証跡も不要』にすると、確認申請なしで進む提案が通ってしまう。"
+  `:undetermined` な instrument の証跡も要求する —— 要否が決まっていないものを
+  『不要だから証跡も不要』にすると、許可なしで進む提案が通ってしまう。"
   [iso3 placement]
-  (if-let [req (requirements iso3)]
-    (let [a (applicable placement)
-          regs (into (:required a) (:undetermined a))]
-      (vec (distinct (concat (:base-evidence req)
-                             (keep #(:reg/evidence-key (get regulations %)) (sort regs))))))
-    :no-spec-basis))
+  (let [a (applicable iso3 placement)]
+    (if (= a :no-spec-basis)
+      :no-spec-basis
+      (let [regs (regulations-for iso3)
+            ids (into (:required a) (:undetermined a))]
+        (vec (distinct (concat base-evidence
+                               (keep #(:reg/evidence-key (get regs %)) (sort ids)))))))))
 
 (defn missing-evidence
-  "掲出提案が持つべき証跡のうち、まだ無いもの。管轄が未収録なら `:no-spec-basis`
-  を返す（空 vector ではない —— 空は『全部揃っている』と読めてしまう）。"
+  "持つべき証跡のうち、まだ無いもの。法域が未収録なら `:no-spec-basis`。"
   [iso3 placement provided-evidence-keys]
   (let [need (required-evidence iso3 placement)]
     (if (= :no-spec-basis need)
       :no-spec-basis
-      (let [have (set (map str provided-evidence-keys))]
-        (vec (remove have need))))))
+      (vec (remove (set (map str provided-evidence-keys)) need)))))
 
-(defn describe-regulation [id] (get regulations id))
+(defn summary
+  "監査ログ用の一行。"
+  [iso3 placement]
+  (let [a (applicable iso3 placement)]
+    (if (= a :no-spec-basis)
+      (str iso3 " → spec-basis 無し（未収録法域）")
+      (str iso3 " → 要 " (str/join "," (map name (sort (:required a))))
+           (when (seq (:undetermined a))
+             (str " / 未確定 " (str/join "," (map name (sort (:undetermined a))))))))))

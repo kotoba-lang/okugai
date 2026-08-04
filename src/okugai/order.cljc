@@ -46,14 +46,18 @@
 
 (defn placement
   "order → `okugai.facts/applicable` に渡す掲出条件。媒体固有の面情報
-  （電柱の袖＝道路上空 等）は `:order/overhangs-road?` として order が持つ。"
+  （電柱の袖＝道路上空 等）は `:order/overhangs-road?` として order が持つ。
+
+  `:special-zones` は防火地域などの区域集合。**nil と空集合を区別する** ——
+  nil は『調べていない』、空集合は『調べた結果どの区域にも入らない』。"
   [order]
   {:medium (:order/medium order)
    :height-m (:order/height-m order)
-   :fire-prevention-district? (:order/fire-prevention-district? order)
+   :area-m2 (:order/area-m2 order)
+   :special-zones (:order/special-zones order)
    :overhangs-road? (:order/overhangs-road? order)
-   :expressway-adjacent? (:order/expressway-adjacent? order)
-   :expressway-facility? (:order/expressway-facility? order)})
+   :highway-adjacent? (:order/highway-adjacent? order)
+   :highway-facility? (:order/highway-facility? order)})
 
 (defn violations
   "`order` を `to` へ進めてよいか。理由の文字列 vector（空 = 可）。
@@ -105,10 +109,12 @@
       (conj (str "no spec-basis for jurisdiction " (iso3 order)))
 
       ;; 規制の要否が判定できないまま許可申請へ進めない
-      (and (= to :permit-filed) (facts/undetermined? (placement order)))
+      (and (= to :permit-filed) (facts/undetermined? (iso3 order) (placement order)))
       (conj (str "regulatory applicability undetermined: "
-                 (vec (sort (map name (:undetermined (facts/applicable (placement order))))))
-                 " — 高さ・防火地域・道路上空の別を確定してから申請する"))
+                 (let [a (facts/applicable (iso3 order) (placement order))]
+                   (if (= a :no-spec-basis) [:no-spec-basis]
+                       (vec (sort (map name (:undetermined a))))))
+                 " — 高さ・面積・区域・道路上空の別を確定してから申請する"))
 
       (and (= to :permit-filed)
            (let [m (facts/missing-evidence (iso3 order) (placement order)
@@ -142,8 +148,8 @@
           (update :order/history (fnil conj []) {:history/to to :history/risk (risk to)})))))
 
 (defn new-order
-  [{:keys [site medium jurisdiction advertiser route-status height-m
-           overhangs-road? fire-prevention-district? expressway-adjacent?]}]
+  [{:keys [site medium jurisdiction advertiser route-status height-m area-m2
+           overhangs-road? special-zones highway-adjacent?]}]
   {:order/state :draft
    :order/site site
    :order/medium (or medium (:site/medium site))
@@ -151,9 +157,10 @@
    :order/advertiser advertiser
    :order/route-status route-status
    :order/height-m height-m
+   :order/area-m2 area-m2
    :order/overhangs-road? overhangs-road?
-   :order/fire-prevention-district? fire-prevention-district?
-   :order/expressway-adjacent? expressway-adjacent?
+   :order/special-zones special-zones
+   :order/highway-adjacent? highway-adjacent?
    :order/evidence {}
    :order/history []})
 
@@ -161,10 +168,15 @@
   "この掲出に効く規制の一覧（人が読む用 + 監査ログ）。`:undetermined` を
   隠さないのが要点。"
   [order]
-  (let [a (facts/applicable (placement order))]
-    {:regulatory/required (vec (sort (map name (:required a))))
-     :regulatory/undetermined (vec (sort (map name (:undetermined a))))
-     :regulatory/not-applicable (vec (sort (map name (:not-applicable a))))
-     :regulatory/note (if (seq (:undetermined a))
-                        "要否が確定していない規制がある。高さ・防火地域・道路上空の別を確定するまで申請に進めない。"
-                        "既知の条件で要否は確定済み。")}))
+  (let [a (facts/applicable (iso3 order) (placement order))]
+    (if (= a :no-spec-basis)
+      {:regulatory/jurisdiction (iso3 order)
+       :regulatory/status :no-spec-basis
+       :regulatory/note "この法域は okugai.facts に未収録。要件を創作せず、掲出提案は保留する。"}
+      {:regulatory/jurisdiction (iso3 order)
+       :regulatory/required (vec (sort (map name (:required a))))
+       :regulatory/undetermined (vec (sort (map name (:undetermined a))))
+       :regulatory/not-applicable (vec (sort (map name (:not-applicable a))))
+       :regulatory/note (if (seq (:undetermined a))
+                          "要否が確定していない規制がある。高さ・面積・区域・道路上空の別を確定するまで申請に進めない。"
+                          "既知の条件で要否は確定済み。")})))

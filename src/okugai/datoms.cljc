@@ -54,17 +54,38 @@
      :medium/note (:medium/note m)}))
 
 (defn regulation->entity
-  [id]
-  (let [r (facts/describe-regulation id)]
+  "instrument → entity。**法域を必ず持たせる** —— これが無いと日本の建築基準法88条と
+  米国の HBA が同じ面で区別できなくなる。"
+  [iso3 id]
+  (let [r (facts/describe-regulation iso3 id)]
     (cond-> {:regulation/id (name id)
-             :regulation/name-ja (:reg/name-ja r)
+             :regulation/jurisdiction iso3
+             :regulation/category (name (:reg/category r))
+             :regulation/decision (name (:reg/decision r))
+             :regulation/name (:reg/name r)
              :regulation/authority (:reg/authority r)
              :regulation/legal-basis (:reg/legal-basis r)
-             :regulation/trigger (:reg/trigger r)
+             :regulation/evidence-key (:reg/evidence-key r)
              :regulation/source-urls (vec (:reg/source-urls r))}
+      (:reg/note r) (assoc :regulation/note (:reg/note r))
       (:reg/penalty r) (assoc :regulation/penalty (:reg/penalty r))
+      (:reg/zone r) (assoc :regulation/zone (name (:reg/zone r)))
       (get-in r [:reg/threshold :height-m])
-      (assoc :regulation/threshold-height-m (get-in r [:reg/threshold :height-m])))))
+      (assoc :regulation/threshold-height-m (get-in r [:reg/threshold :height-m]))
+      (get-in r [:reg/threshold :area-m2])
+      (assoc :regulation/threshold-area-m2 (get-in r [:reg/threshold :area-m2]))
+      (get-in r [:reg/threshold :corridor-distance-ft])
+      (assoc :regulation/threshold-corridor-ft
+             (get-in r [:reg/threshold :corridor-distance-ft])))))
+
+(defn jurisdiction->entity
+  [iso3]
+  (let [j (facts/requirements iso3)]
+    {:jurisdiction/iso3 iso3
+     :jurisdiction/name (:name j)
+     :jurisdiction/permit-level (name (:permit-level j))
+     :jurisdiction/instruments (count (facts/regulations-for iso3))
+     :jurisdiction/note (:note j)}))
 
 (defn catalog-shard
   "媒体タクソノミーと規制カタログの**静的カタログ**。survey 面とは別ファイルに出す
@@ -72,10 +93,23 @@
   従来どおりできる。"
   []
   (vec (concat (map medium->entity (sort (keys medium/media)))
-               (map regulation->entity (sort (keys facts/regulations))))))
+               (map jurisdiction->entity (sort (keys facts/regulations)))
+               (for [iso3 (sort (keys facts/regulations))
+                     id (sort (keys (facts/regulations-for iso3)))]
+                 (regulation->entity iso3 id))
+               ;; 未収録のうち人口の大きい法域も entity にする —— 「N 法域収録」だけ
+               ;; 見せると世界を覆っているように読めるため、欠けている側も引けるようにする。
+               (for [e (:entries facts/uncovered-large-jurisdictions)]
+                 {:jurisdiction/iso3 (:iso3 e)
+                  :jurisdiction/name (:name e)
+                  :jurisdiction/covered false
+                  :jurisdiction/population (:population e)
+                  :jurisdiction/population-source (:source-url facts/uncovered-large-jurisdictions)
+                  :jurisdiction/population-as-of (:as-of facts/uncovered-large-jurisdictions)
+                  :jurisdiction/note "人口 1 億超だが okugai.facts に未収録。spec-basis 無し。"}))))
 
 (defn coverage->entity
-  [{:keys [sites areas sources rejected generated-at media-requested]}]
+  [{:keys [sites areas sources rejected generated-at media-requested source-errors]}]
   (let [mc (medium/coverage)]
     {:okugai.coverage/sites (count sites)
      :okugai.coverage/areas (vec areas)
@@ -83,6 +117,11 @@
      :okugai.coverage/media-requested (vec (sort (map name (or media-requested []))))
      :okugai.coverage/sites-by-medium (pr-str (into (sorted-map) (dissoc (frequencies (map (comp name :site/medium) sites)) nil)))
      :okugai.coverage/rejected-observations (or rejected 0)
+     ;; **失敗した source を数える。** 0 件が「調べて無かった」なのか
+     ;; 「調べられなかった」なのかは、これが無いと台帳から区別できない。
+     :okugai.coverage/source-errors (count (or source-errors []))
+     :okugai.coverage/sources-failed (vec (sort (map (comp name :source) (or source-errors []))))
+     :okugai.coverage/partial (boolean (seq source-errors))
      :okugai.coverage/media-known (:media mc)
      :okugai.coverage/media-observable (:observable mc)
      :okugai.coverage/media-unobservable (vec (:unobservable mc))
@@ -106,9 +145,10 @@
 
 (defn inventory-shard
   "1 area 分の survey 結果 → `*.datoms.edn` に書ける entity map の vector。"
-  [{:keys [sites areas sources rejected generated-at media-requested]}]
+  [{:keys [sites areas sources rejected generated-at media-requested source-errors]}]
   (vec (concat
         (map site->entity (sort-by :site/id sites))
         [(coverage->entity {:sites sites :areas areas :sources sources
                             :rejected (or rejected 0) :generated-at generated-at
-                            :media-requested media-requested})])))
+                            :media-requested media-requested
+                            :source-errors source-errors})])))

@@ -1,84 +1,119 @@
 (ns okugai.facts-test
   (:require [clojure.test :refer [deftest is testing]]
-            [okugai.facts :as facts]))
+            [okugai.facts :as facts]
+            [okugai.medium :as medium]))
 
-(deftest outdoor-ad-permit-applies-to-everything
-  (doseq [m [:utility-pole :billboard :board :wall :screen :banner]]
-    (is (contains? (:required (facts/applicable {:medium m})) :outdoor-ad-permit)
-        (str m))))
+(deftest categories-are-universal-instruments-are-not
+  (testing "媒体が持つのは普遍カテゴリだけ"
+    (doseq [[id m] medium/media]
+      (is (every? facts/categories (:medium/regulatory-triggers m)) (str id))))
+  (testing "instrument は法域ごとに別物 — 同じ id が 2 法域に現れない"
+    (let [ids (mapcat (comp keys val) facts/regulations)]
+      (is (= (count ids) (count (distinct ids)))))))
 
-(deftest building-code-88-turns-on-above-four-metres
-  (testing "4m 超なら要る"
-    (is (contains? (:required (facts/applicable {:medium :billboard :height-m 5.2}))
-                   :building-code-88)))
-  (testing "4m 以下なら要らない"
-    (is (contains? (:not-applicable (facts/applicable {:medium :billboard :height-m 3.0}))
-                   :building-code-88)))
-  (testing "**高さ不明を『不要』に倒さない** — 違法着工になる"
-    (let [a (facts/applicable {:medium :billboard})]
-      (is (contains? (:undetermined a) :building-code-88))
-      (is (not (contains? (:not-applicable a) :building-code-88))))))
+(deftest eight-jurisdictions-are-covered
+  (is (= ["ARE" "CHN" "DEU" "FRA" "IND" "JPN" "SAU" "USA"] (:jurisdictions (facts/coverage))))
+  (testing "未収録の大人口法域を名指しで申告する"
+    (let [c (facts/coverage)]
+      (is (= 9 (count (:uncovered-large c))))
+      (is (some #(re-find #"IDN" %) (:uncovered-large c)))
+      (is (re-find #"EU レベルの掲出許可制度は存在しない" (:note c))))))
 
-(deftest fire-prevention-district-rule
-  (testing "防火地域の建物付帯は屋上/壁面なら高さ不問で 64 条"
-    (is (contains? (:required (facts/applicable {:medium :rooftop
-                                                 :fire-prevention-district? true}))
-                   :building-code-64)))
-  (testing "防火地域でなければ 64 条は要らない"
-    (is (contains? (:not-applicable (facts/applicable {:medium :rooftop
-                                                       :fire-prevention-district? false}))
-                   :building-code-64)))
-  (testing "防火地域かどうか不明なら undetermined"
-    (is (contains? (:undetermined (facts/applicable {:medium :rooftop}))
-                   :building-code-64))))
+(deftest display-permit-applies-in-every-covered-jurisdiction
+  (doseq [iso3 (keys facts/regulations)]
+    (let [a (facts/applicable iso3 {:medium :billboard})]
+      (is (seq (:required a)) (str iso3 " has no always-required display permit")))))
 
-(deftest road-occupancy-follows-the-overhang-not-the-medium
-  (is (contains? (:required (facts/applicable {:medium :utility-pole :overhangs-road? true}))
-                 :road-occupancy))
-  (is (contains? (:not-applicable (facts/applicable {:medium :utility-pole :overhangs-road? false}))
-                 :road-occupancy))
-  (is (contains? (:undetermined (facts/applicable {:medium :utility-pole}))
-                 :road-occupancy)))
+(deftest structural-thresholds-differ-by-jurisdiction
+  (testing "JP は高さ 4m 超"
+    (is (contains? (:required (facts/applicable "JPN" {:medium :billboard :height-m 5.0}))
+                   :jp-building-code-88))
+    (is (contains? (:not-applicable (facts/applicable "JPN" {:medium :billboard :height-m 3.0}))
+                   :jp-building-code-88)))
+  (testing "DE は**面積** 1m² 超 — 高さでは決まらない"
+    (is (contains? (:required (facts/applicable "DEU" {:medium :billboard :area-m2 6.0}))
+                   :de-genehmigungsfreiheit))
+    (is (contains? (:not-applicable (facts/applicable "DEU" {:medium :billboard :area-m2 0.5}))
+                   :de-genehmigungsfreiheit))
+    (testing "高さだけ渡しても DE では判定できない"
+      (is (contains? (:undetermined (facts/applicable "DEU" {:medium :billboard :height-m 5.0}))
+                     :de-genehmigungsfreiheit))))
+  (testing "IN は 15ft ≒ 4.6m"
+    (is (contains? (:required (facts/applicable "IND" {:medium :billboard :height-m 5.0}))
+                   :in-structural-stability))))
 
-(deftest expressway-facility-is-always-in-scope
-  (is (contains? (:required (facts/applicable {:medium :expressway-service-area
-                                               :expressway-facility? true}))
-                 :expressway))
-  (testing "沿道は隣接判定が要る"
-    (is (contains? (:undetermined (facts/applicable {:medium :expressway-roadside}))
-                   :expressway))))
+(deftest us-highway-beautification-act-is-corridor-based
+  (let [r (facts/describe-regulation "USA" :us-highway-beautification-act)]
+    (is (= 660 (get-in r [:reg/threshold :corridor-distance-ft])))
+    (is (re-find #"23 U.S.C." (:reg/legal-basis r))))
+  (is (contains? (:required (facts/applicable "USA" {:medium :billboard :highway-adjacent? true}))
+                 :us-highway-beautification-act))
+  (is (contains? (:not-applicable (facts/applicable "USA" {:medium :billboard :highway-adjacent? false}))
+                 :us-highway-beautification-act))
+  (testing "沿線かどうか不明なら undetermined"
+    (is (contains? (:undetermined (facts/applicable "USA" {:medium :billboard}))
+                   :us-highway-beautification-act))))
 
-(deftest undetermined-blocks-by-default
-  (is (true? (facts/undetermined? {:medium :billboard})))
-  (is (false? (facts/undetermined? {:medium :board :overhangs-road? false}))))
+(deftest unknown-jurisdiction-has-no-spec-basis
+  (is (= :no-spec-basis (facts/applicable "BRA" {:medium :billboard})))
+  (is (= :no-spec-basis (facts/required-evidence "BRA" {:medium :billboard})))
+  (is (= :no-spec-basis (facts/missing-evidence "BRA" {:medium :billboard} [])))
+  (testing "未収録法域は undetermined? が true（＝進めない）"
+    (is (true? (facts/undetermined? "BRA" {:medium :billboard})))))
 
-(deftest jurisdiction-coverage-is-honest
-  (let [c (facts/coverage)]
-    (is (= ["JPN"] (:jurisdictions c)))
-    (is (= 6 (:regulations c)))
-    (is (re-find #"創作してはならず" (:note c)))))
+(deftest unknown-dimensions-are-never-treated-as-not-required
+  (let [a (facts/applicable "JPN" {:medium :billboard})]
+    (is (contains? (:undetermined a) :jp-building-code-88))
+    (is (not (contains? (:not-applicable a) :jp-building-code-88)))))
 
-(deftest required-evidence-is-medium-aware
-  (testing "電柱に工作物確認済証を要求しない（88 条の trigger を持たない媒体）"
+(deftest fire-prevention-zone-needs-the-zone-set-not-a-boolean
+  (testing "区域を調べていない（nil）と、調べて該当なし（空集合）を区別する"
+    (is (contains? (:undetermined (facts/applicable "JPN" {:medium :rooftop :height-m 5.0}))
+                   :jp-building-code-64))
+    (is (contains? (:not-applicable (facts/applicable "JPN" {:medium :rooftop :height-m 5.0
+                                                             :special-zones #{}}))
+                   :jp-building-code-64))
+    (is (contains? (:required (facts/applicable "JPN" {:medium :rooftop :height-m 5.0
+                                                       :special-zones #{:fire-prevention-district}}))
+                   :jp-building-code-64))))
+
+(deftest required-evidence-is-jurisdiction-and-medium-aware
+  (testing "電柱に工作物確認済証を要求しない"
     (let [need (facts/required-evidence "JPN" {:medium :utility-pole :overhangs-road? false})]
       (is (not (some #{"building-code-88-record"} need)))
       (is (some #{"outdoor-ad-permit-record"} need))))
-  (testing "4m 超の野立看板には要求する"
-    (let [need (facts/required-evidence "JPN" {:medium :billboard :height-m 5.0
-                                               :fire-prevention-district? false
-                                               :expressway-adjacent? false})]
-      (is (some #{"building-code-88-record"} need))))
-  (testing "要否が undetermined のものも証跡を要求する —— 不明を不要に倒さない"
-    (let [need (facts/required-evidence "JPN" {:medium :billboard})]
-      (is (some #{"building-code-88-record"} need)))))
+  (testing "米国の billboard は州 DOT / HBA / 自治体の 3 経路"
+    (let [need (facts/required-evidence "USA" {:medium :billboard :highway-adjacent? true
+                                               :height-m 5.0})]
+      (is (some #{"local-sign-permit-record"} need))
+      (is (some #{"state-dot-outdoor-advertising-permit-record"} need))
+      (is (some #{"highway-authority-record"} need))))
+  (testing "ドイツは Baugenehmigung"
+    (is (some #{"baugenehmigung-record"}
+              (facts/required-evidence "DEU" {:medium :billboard :area-m2 6.0})))))
 
-(deftest missing-evidence-distinguishes-empty-from-no-basis
-  (is (= :no-spec-basis (facts/missing-evidence "XXX" {:medium :board} [])))
-  (is (seq (facts/missing-evidence "JPN" {:medium :board} [])))
-  (let [pl {:medium :utility-pole :overhangs-road? false}]
-    (is (empty? (facts/missing-evidence "JPN" pl (facts/required-evidence "JPN" pl))))))
+(deftest every-instrument-carries-a-source-and-basis
+  (doseq [[iso3 regs] facts/regulations
+          [id r] regs]
+    (is (seq (:reg/source-urls r)) (str iso3 "/" id " has no source"))
+    (is (seq (:reg/legal-basis r)) (str iso3 "/" id " has no legal basis"))
+    (is (contains? facts/categories (:reg/category r)) (str iso3 "/" id " bad category"))
+    (is (seq (:reg/evidence-key r)) (str iso3 "/" id " has no evidence key"))))
 
-(deftest every-regulation-carries-a-source
-  (doseq [[id r] facts/regulations]
-    (is (seq (:reg/source-urls r)) (str id " has no source"))
-    (is (seq (:reg/legal-basis r)) (str id " has no legal basis"))))
+(deftest summary-says-when-there-is-no-basis
+  (is (re-find #"spec-basis 無し" (facts/summary "BRA" {:medium :billboard})))
+  (is (re-find #"要 " (facts/summary "JPN" {:medium :board}))))
+
+(deftest iso-3166-2-codes-resolve-to-the-catalog
+  (testing "survey の area は ISO 3166-2 で宣言されるが法令は alpha-3 キー"
+    (is (= "JPN" (facts/iso3-of "JP-13")))
+    (is (= "USA" (facts/iso3-of "US-NY")))
+    (is (= "DEU" (facts/iso3-of "DE-BE")))
+    (is (= "IND" (facts/iso3-of "IN-MH")))
+    (is (= "JPN" (facts/iso3-of "JPN")))
+    (is (true? (facts/covered? "US-CA"))))
+  (testing "未収録国の alpha-2 は解決しない（法令が無いのに法域が立つのを防ぐ）"
+    (is (nil? (facts/iso3-of "BR-SP")))
+    (is (nil? (facts/iso3-of "ID-JK")))
+    (is (false? (facts/covered? "BR-SP")))
+    (is (nil? (facts/iso3-of nil)))))

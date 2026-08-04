@@ -12,18 +12,23 @@
   screen 7 / poster_box 2 / column 1 / totem 1 / sign 1 だった。**推測した値を
   混ぜない** —— 存在しないタグで引くと空応答が『媒体が無い』に見える。
 
-  ## 規制トリガは媒体の**形**で決まる
+  ## 規制トリガは**普遍カテゴリ**で、法令名ではない
 
-  屋外広告物条例はほぼ全媒体に効くが、その上に載る規制は形状と設置場所で決まる:
+  各国の法令名を共通語彙にすると「ある国の法体系が世界のモデル」になってしまう。
+  媒体が持つのは**どんな規制カテゴリに触れうるか**だけで、そのカテゴリを実際に
+  どの法令が担うかは `okugai.facts` が法域ごとに持つ:
 
-  - `:road-occupancy`   道路上空・路上に出る → 道路法32条の道路占用許可
-  - `:road-use`         道路上に工作物を設ける → 道路交通法の道路使用許可
-  - `:building-code-88` 高さ4m超の広告塔・広告板 → 建築基準法88条1項（令138条1項3号）
-                        の工作物確認申請。屋上の広告塔も広告塔部分が4m超なら対象
-  - `:building-code-64` 防火地域内で建築物の屋上、または高さ3m超 → 主要部分を
-                        不燃材料に（建築基準法64条）
-  - `:expressway`       高速道路の道路区域内は道路管理者（NEXCO 等）の許可。沿道は
-                        条例の禁止区域指定・ガイドラインが上乗せされうる
+  - `:display-permit`    掲出そのものの許可（JP 屋外広告物条例 / FR déclaration ou
+                         autorisation préalable / DE Baugenehmigung / CN 设置规划と
+                         审批 / IN 市自治体の NOC / SA Balady / AE Dubai Municipality
+                         permit / US 州 DOT + 地方 zoning）
+  - `:road-space`        道路上空・路上に出る（JP 道路占用/道路使用 ほか）
+  - `:structural`        構造・建築の審査（JP 建築基準法88条の4m超工作物確認と
+                         64条の防火地域 / DE Werbeanlage は bauliche Anlage /
+                         IN structural stability certificate）
+  - `:highway-corridor`  幹線道路の沿線・区域（US Highway Beautification Act の
+                         right-of-way 660 ft / JP 高速道路沿道ガイドライン /
+                         IN 国道 right-of-way 上の禁止）
 
   **高さは媒体種別からは決まらない。** 同じ `:billboard` でも 3m と 6m がある。
   だから `:regulatory-triggers` は『**条件付きで効きうる**規制』の集合であって、
@@ -42,7 +47,7 @@
     :medium/mapillary ["object--support--utility-pole" "object--support--pole"]
     :medium/owner-kind :utility          ; 電力・通信事業者
     :medium/attached-to :pole
-    :medium/regulatory-triggers #{:outdoor-ad-permit :road-occupancy}
+    :medium/regulatory-triggers #{:display-permit :road-space}
     :medium/domain-repo "kotoba-lang/denchu"
     :medium/note "販売は所有者の指定代理店経由。区域から候補所有者を導ける唯一の媒体。"}
 
@@ -53,8 +58,7 @@
     :medium/mapillary ["object--sign--advertisement"]
     :medium/owner-kind :landowner-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit :building-code-88 :building-code-64
-                                  :expressway}
+    :medium/regulatory-triggers #{:display-permit :structural :highway-corridor}
     :medium/note "自立式。高さ4m超なら工作物確認申請。高速道路沿道は禁止区域指定がありうる。"}
 
    :board
@@ -64,7 +68,7 @@
     :medium/mapillary ["object--sign--advertisement" "object--sign--store"]
     :medium/owner-kind :landowner-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit}
+    :medium/regulatory-triggers #{:display-permit}
     :medium/note "実測で最も多い値（都心 bbox 46 件中 25 件）。小型なので 88 条は通常かからない。"}
 
    :wall
@@ -74,7 +78,7 @@
     :medium/mapillary ["object--banner" "object--sign--store"]
     :medium/owner-kind :building-owner
     :medium/attached-to :building
-    :medium/regulatory-triggers #{:outdoor-ad-permit :building-code-64}
+    :medium/regulatory-triggers #{:display-permit :structural}
     :medium/note "建物所有者の承諾が前提。突出すれば道路占用も。"}
 
    :rooftop
@@ -87,7 +91,7 @@
     :medium/mapillary []
     :medium/owner-kind :building-owner
     :medium/attached-to :building
-    :medium/regulatory-triggers #{:outdoor-ad-permit :building-code-88 :building-code-64}
+    :medium/regulatory-triggers #{:display-permit :structural}
     :medium/note "広告塔部分が高さ4m超なら工作物確認申請。防火地域の屋上は 64 条で不燃材料。**観測では見つからない** —— 媒体社カタログか現地調査からしか入らない。"}
 
    :screen
@@ -97,7 +101,7 @@
     :medium/mapillary ["object--sign--advertisement"]
     :medium/owner-kind :media-operator
     :medium/attached-to :building
-    :medium/regulatory-triggers #{:outdoor-ad-permit :building-code-88 :building-code-64}
+    :medium/regulatory-triggers #{:display-permit :structural}
     :medium/note "運営会社が明確なことが多く、媒体社への直接照会が成立しやすい。"}
 
    :poster-box
@@ -107,7 +111,7 @@
     :medium/mapillary ["object--sign--information"]
     :medium/owner-kind :municipality-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit :road-occupancy}
+    :medium/regulatory-triggers #{:display-permit :road-space}
     :medium/note "自治体設置のものは公共掲示板で広告媒体ではない場合がある（operator を見る）。"}
 
    :column
@@ -117,7 +121,7 @@
     :medium/mapillary ["object--banner"]
     :medium/owner-kind :media-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit :road-occupancy}}
+    :medium/regulatory-triggers #{:display-permit :road-space}}
 
    :totem
    {:medium/id :totem
@@ -126,7 +130,7 @@
     :medium/mapillary ["object--sign--store"]
     :medium/owner-kind :landowner-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit :building-code-88}}
+    :medium/regulatory-triggers #{:display-permit :structural}}
 
    :sign
    {:medium/id :sign
@@ -135,7 +139,7 @@
     :medium/mapillary ["object--sign--advertisement" "object--sign--store"]
     :medium/owner-kind :landowner-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit}}
+    :medium/regulatory-triggers #{:display-permit}}
 
    :banner
    {:medium/id :banner
@@ -144,7 +148,7 @@
     :medium/mapillary ["object--banner"]
     :medium/owner-kind :landowner-or-operator
     :medium/attached-to :building
-    :medium/regulatory-triggers #{:outdoor-ad-permit}
+    :medium/regulatory-triggers #{:display-permit}
     :medium/note "多くの条例が電柱・街路灯柱への広告旗を禁止物件として列挙する —— 掲出場所で可否が変わる。"}
 
    :transit-shelter
@@ -156,7 +160,7 @@
     :medium/mapillary []
     :medium/owner-kind :transit-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit :road-occupancy}
+    :medium/regulatory-triggers #{:display-permit :road-space}
     :medium/note "停留所の位置は OSM にあるが、そこに広告面があるかは書かれていない。媒体社カタログからしか入らない。"}
 
    :expressway-roadside
@@ -170,7 +174,7 @@
     :medium/derived-from :billboard
     :medium/owner-kind :landowner-or-operator
     :medium/attached-to :ground
-    :medium/regulatory-triggers #{:outdoor-ad-permit :building-code-88 :expressway}
+    :medium/regulatory-triggers #{:display-permit :structural :highway-corridor}
     :medium/note "道路区域の外。条例の禁止区域指定・高速道路沿道ガイドラインが上乗せされうる。billboard の後付け分類であって独立に観測できる媒体ではない。"}
 
    :expressway-service-area
@@ -180,7 +184,7 @@
     :medium/mapillary []
     :medium/owner-kind :expressway-operator
     :medium/attached-to :facility
-    :medium/regulatory-triggers #{:expressway}
+    :medium/regulatory-triggers #{:highway-corridor}
     :medium/note "道路区域内なので道路管理者（NEXCO 各社）の媒体。屋外広告物条例ではなく媒体社の媒体資料が窓口。**観測では見つからない** —— 媒体社カタログからしか入らない。"}})
 
 (def observable-media

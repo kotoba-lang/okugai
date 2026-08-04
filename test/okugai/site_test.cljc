@@ -1,6 +1,7 @@
 (ns okugai.site-test
   (:require [clojure.test :refer [deftest is testing]]
             [okugai.datoms :as datoms]
+            [okugai.facts :as facts]
             [okugai.order :as order]
             [okugai.pricing :as pricing]
             [okugai.site :as site]))
@@ -66,28 +67,31 @@
   (merge (order/new-order (merge {:site billboard-site :route-status :routable} over))))
 
 (deftest permit-is-blocked-while-applicability-is-undetermined
-  (let [ev (zipmap ["site-owner-consent-record" "outdoor-ad-permit-record"
-                    "road-occupancy-permit-record" "building-code-88-record"
-                    "agency-order-record" "creative-spec-record"] (repeat true))
-        o (assoc (draft) :order/state :agency-confirmed :order/evidence ev)]
-    (testing "高さも防火地域も未確定のままでは申請に進めない"
+  (let [o (assoc (draft) :order/state :agency-confirmed)]
+    (testing "高さも区域も未確定のままでは申請に進めない"
       (is (some #(re-find #"undetermined" %) (order/violations o :permit-filed))))
-    (testing "条件を確定させれば通る"
-      (let [o2 (assoc o :order/height-m 3.0 :order/fire-prevention-district? false
-                      :order/overhangs-road? false :order/expressway-adjacent? false)]
-        (is (empty? (order/violations o2 :permit-filed)))))))
+    (testing "条件を確定させ、そこで要る証跡を揃えれば通る"
+      (let [o2 (assoc o :order/height-m 3.0 :order/special-zones #{}
+                      :order/overhangs-road? false :order/highway-adjacent? false)
+            need (facts/required-evidence "JPN" (order/placement o2))
+            o3 (assoc o2 :order/evidence (zipmap need (repeat true)))]
+        (is (empty? (order/violations o3 :permit-filed)))))))
 
 (deftest regulatory-summary-does-not-hide-undetermined
   (let [s (order/regulatory-summary (draft))]
     (is (seq (:regulatory/undetermined s)))
     (is (re-find #"確定していない" (:regulatory/note s))))
   (let [s (order/regulatory-summary (assoc (draft) :order/height-m 6.0
-                                           :order/fire-prevention-district? true
+                                           :order/special-zones #{:fire-prevention-district}
                                            :order/overhangs-road? false
-                                           :order/expressway-adjacent? false))]
+                                           :order/highway-adjacent? false))]
+    (is (= "JPN" (:regulatory/jurisdiction s)))
     (is (empty? (:regulatory/undetermined s)))
-    (is (some #{"building-code-88"} (:regulatory/required s)))
-    (is (some #{"building-code-64"} (:regulatory/required s)))))
+    (is (some #{"jp-building-code-88"} (:regulatory/required s)))
+    (is (some #{"jp-building-code-64"} (:regulatory/required s))))
+  (testing "未収録法域は :no-spec-basis を返して隠さない"
+    (let [s (order/regulatory-summary (assoc (draft) :order/jurisdiction "BRA"))]
+      (is (= :no-spec-basis (:regulatory/status s))))))
 
 (deftest unreachable-route-blocks-inquiry
   (let [o (assoc (draft :route-status :unknown-owner)
