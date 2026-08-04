@@ -1,0 +1,4 @@
+;; okugai — 屋外広告物（physical / out-of-home）の一般ドメイン。純 .cljc、依存ゼロ。
+{:paths ["src"]
+ :deps {}
+ :aliases {:test {:extra-paths ["test"]}}}
