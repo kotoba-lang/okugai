@@ -21,7 +21,7 @@
   ⚠ ただし `operator` は『その広告物を運営する者』であって媒体社とは限らない
   （自社広告の看板なら広告主自身、公共掲示板なら自治体）。だから
   `:operator-known` は『照会先の手がかりがある』であって『買える』ではない。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [okugai.facts :as facts]
             [okugai.operator :as operator]))
 

@@ -11,7 +11,7 @@
   - 地域区分が分からない見積は `:quote/total nil` を返し、何が足りないかを
     `:quote/unknowns` に列挙する。**足りない値を平均や中央値で埋めない**
   - 税抜/税込を混ぜて合算しない"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn rate-card?
   [c]
