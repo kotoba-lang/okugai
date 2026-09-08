@@ -16,7 +16,7 @@
   - **高さ・寸法を観測から導かない。** OSM/Mapillary は高さを持たないので、
     `:site/height-m` は常に nil から始まる —— 建築基準法88条の判定に直結するので、
     ここを推測で埋めると『確認申請不要』という嘘になる。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [okugai.medium :as medium]))
 
 ;; ── 座標 ────────────────────────────────────────────────────────────

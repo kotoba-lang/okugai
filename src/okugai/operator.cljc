@@ -19,7 +19,7 @@
   世界の OOH 市場は数千社の地場事業者がいて、ここに載るのは公開情報で確認できた
   大手だけ。`coverage` は法域あたり何社かを返す —— 「候補が出た」を
   「市場を網羅した」と読ませないため。"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def operators
   "事業者 id → 実体。`:operator/jurisdictions` は**公開情報で確認できた**主要市場で、

@@ -32,7 +32,7 @@
 
   高さ・面積・区域が分からなければ `:undetermined`。`okugai.order` は
   `:undetermined` が残る限り許可申請に進めない。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [okugai.medium :as medium]))
 
 (def categories

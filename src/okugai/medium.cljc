@@ -34,7 +34,7 @@
   だから `:regulatory-triggers` は『**条件付きで効きうる**規制』の集合であって、
   『必ず要る』ではない —— 実際の要否は `okugai.facts/applicable` に寸法と場所を
   渡して判定する。"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def media
   "媒体 id → 定義。`:osm` は OSM のタグ、`:mapillary` は Mapillary の object_value
