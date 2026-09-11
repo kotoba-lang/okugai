@@ -1,5 +1,5 @@
 #!/usr/bin/env nbb
-;; nbb --classpath src:test test/run.cljs
+;; nbb --classpath src:test test/run.cljk
 ;;
 ;; Why the exit code comes from a report method and not from the return value
 ;; of `run-tests`:
