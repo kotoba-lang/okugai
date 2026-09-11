@@ -95,7 +95,7 @@ OSM タグの値は**実測に基づく**（2026-08-04、都心 bbox で 46 件:
 ## テスト
 
 ```bash
-nbb --classpath src:test test/run.cljk     # 29 tests / 155 assertions
+kbb --backend sci --classpath src:test test/run.cljk     # 29 tests / 155 assertions
 ```
 
 第一の runtime は ClojureScript / nbb。`.kotoba` に載せていないのは、地点→観測列→
