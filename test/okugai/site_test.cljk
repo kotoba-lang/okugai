@@ -1,5 +1,5 @@
 (ns okugai.site-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [okugai.datoms :as datoms]
             [okugai.facts :as facts]
             [okugai.order :as order]
