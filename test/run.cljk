@@ -15,7 +15,7 @@
 ;; whole run block has drained — synchronous and async alike — and carries the
 ;; real summary map. We `set!` process.exitCode rather than calling
 ;; process.exit, so Node still flushes stdout and finishes pending work.
-(require '[clojure.test :as t] 'okugai.medium-test 'okugai.facts-test 'okugai.site-test 'okugai.operator-test)
+(require '[kotoba.test :as t] 'okugai.medium-test 'okugai.facts-test 'okugai.site-test 'okugai.operator-test)
 
 ;; Fail closed. If :end-run-tests never fires — a namespace blew up mid-load,
 ;; the run was truncated — the exit code stays nonzero. A run that could not

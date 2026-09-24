@@ -1,5 +1,5 @@
 (ns okugai.operator-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [okugai.operator :as op]
             [okugai.route :as route]))
 

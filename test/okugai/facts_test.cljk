@@ -1,5 +1,5 @@
 (ns okugai.facts-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [okugai.facts :as facts]
             [okugai.medium :as medium]))
 
